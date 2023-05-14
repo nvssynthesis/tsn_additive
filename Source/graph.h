@@ -227,19 +227,17 @@ static bool pitchDistanceInRange(float src_freq, float dst_freq, connectionHeuri
 
 // create directed graph based on numFrames
 static DirectedGraph_t createGraphFromAnalysisData(AnalysisData const &data, connectionHeuristics const settings = connectionHeuristics()){
-	const multiDimRealVec_t &pca_mat = data.getPCAmat();
-	
+	const multiDimRealVec_t &pca_mat = data.PCAmat;
 	
 	const auto &freqs = data.f0;
 	const auto &voicedness = data.voicedProbability;
 	const auto &loudness = data.loudness[0];
-	const auto &PCAs = data.getPCAmat();
-	const size_t numFrames = pca_mat.size();
+	const size_t numFrames = data.numFrames;
 	
 	assert(freqs.size() == numFrames);
 	assert(voicedness.size() == numFrames);
 	assert(loudness.size() == numFrames);
-	assert(PCAs.size() == numFrames);
+	assert(pca_mat.size() == numFrames);
 
 	DirectedGraph_t dg(numFrames);
 
@@ -270,7 +268,7 @@ static DirectedGraph_t createGraphFromAnalysisData(AnalysisData const &data, con
 		dg[src].fundamentalFreq = &freqs[src];
 		dg[src].voicedness = &voicedness[src];
 		dg[src].loudness = &loudness[src];
-		dg[src].PCAvec = &PCAs[src];
+		dg[src].PCAvec = &pca_mat[src];
 
 		float maxTimbralDistanceForConnection = getMaxTimbralDistanceForConnectionFromVertex(src, pca_mat, settings.timbralPercentile, settings.timbralNumSearch);
 		
