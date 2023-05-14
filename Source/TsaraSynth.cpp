@@ -93,21 +93,21 @@ void TsaraSynth::addNavigationParameters (juce::AudioProcessorValueTreeState::Pa
 												false), // useSymmetricSkew
 											0.f);	// default
 	
-	auto gaussRange = juce::NormalisableRange<float> (0.01f, // min
-												100.f, // max
+	auto gaussRange = juce::NormalisableRange<float> (0.001f, // min
+												0.05f, // max
 												0.f,	//spacing
 												0.1f,	// skewFactor
 													  false);// useSymmetricSkew
-	gaussRange.setSkewForCentre(1.f);
+	gaussRange.setSkewForCentre(0.01f);
 	auto gaussianKernel = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::param_C_kernel, 1),
 		  "Gaussian Kernel Scaling", gaussRange,
 											  1.f);	// default
 	
-	auto probPowerRange = juce::NormalisableRange<float> (-100.f, // min
-												100.f, // max
+	auto probPowerRange = juce::NormalisableRange<float> (-2.f, // min
+												2.f, // max
 												0.f,	//spacing
 												0.1f,	// skewFactor
-													  true);// useSymmetricSkew
+													  false);// useSymmetricSkew
 	probPowerRange.setSkewForCentre(0.f);
 	auto probPower = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramProbPower, 1),
 																 "Probability Power", probPowerRange,
@@ -204,13 +204,14 @@ TsaraSynth::TsaraVoice::TsaraVoice (juce::AudioProcessorValueTreeState& state)
 }
 void TsaraSynth::TsaraVoice::loadPool(const essentia::Pool &p){
 	std::cout << "calling base loadPool\n";
-	nvs::SynthesisContainer::loadPool(p);
+	nvs::SynthesisContainer::loadPool(p);	// appears static, but im really just being explicit about calling inherited method
+
 	std::cout << "also loading into graph\n";
 	
-	nvs::sound_representation soundRep = nvs::getSoundRepresentationFromPool(p);
+//	nvs::sound_representation soundRep = nvs::getSoundRepresentationFromPool(p);
 //	auto PCAmat = soundRep.getPCAmat();
 //	float maxDistanceForConnection = nvs::getMaxTimbralDistanceForConnection(PCAmat, 0.15f, 100UL);
-	dg = std::make_unique<nvs::DirectedGraph_t>( nvs::createGraphFromSoundRepresentation(soundRep) );
+	dg = std::make_unique<nvs::sgt::DirectedGraph_t>( nvs::sgt::createGraphFromAnalysisData(this->getAnalysisData()) );
 	
 	std::cout << "num vert before remove: " << boost::num_vertices(*dg) << '\n';
 	std::cout << "num edge before remove: " << boost::num_edges(*dg) << '\n';
@@ -238,7 +239,7 @@ void TsaraSynth::TsaraVoice::startNote (int midiNoteNumber,
 	
 	const float initialLoc = voiceNavigation->get();
 	initialTargetFrame = round(initialLoc * (getNumFrames() - 1));
-	initialTargetVit = nvs::vertexDescriptorToIterator(*dg, nvs::DirectedGraph_t::vertex_descriptor(initialTargetFrame));
+	initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(initialTargetFrame));
 
 	if (auto* tsaraSound = dynamic_cast<TsaraSound*>(sound)){
 		adsr.setParameters(tsaraSound->getADSR());
@@ -312,8 +313,8 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 	double probPower = static_cast<double>(voiceProbPower->get());
 
 	if (shouldSelectNewFrame){
-		nvs::DirectedGraph_t::vertex_descriptor vd = nvs::traverseToRandomVertex(*dg, *initialTargetVit, C_kernelScaling, probPower);
-		initialTargetVit = nvs::vertexDescriptorToIterator(*dg, nvs::DirectedGraph_t::vertex_descriptor(vd));
+		nvs::sgt::DirectedGraph_t::vertex_descriptor vd = nvs::sgt::traverseToRandomVertex(*dg, *initialTargetVit, C_kernelScaling, probPower);
+		initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
 
 		jassert(vd != getNumFrames() );
 		initialTargetFrame = vd;

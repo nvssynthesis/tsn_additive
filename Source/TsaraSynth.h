@@ -158,8 +158,8 @@ public:
 		bool shouldSelectNewFrame {false};
 		unsigned long initialTargetFrame { 0 };
 		
-		std::unique_ptr<nvs::DirectedGraph_t> dg = nullptr;
-		nvs::DirectedGraph_t::vertex_iterator initialTargetVit ;
+		std::unique_ptr<nvs::sgt::DirectedGraph_t> dg = nullptr;
+		nvs::sgt::DirectedGraph_t::vertex_iterator initialTargetVit ;
 		
         double getDetuneFromPitchWheel (int wheelValue) const;
         double getFrequencyForNote (int noteNumber, double detune, double concertPitch = 440.0) const;

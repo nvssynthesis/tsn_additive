@@ -72,6 +72,7 @@ private:
     juce::ValueTree  presetNode;
 	
 	unsigned int nVoices = 1;
+	std::atomic<bool> voicesCreated {false};
 	
 	juce::File lastFolder = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory);
 

@@ -33,8 +33,10 @@ Tsara_additiveAudioProcessor::Tsara_additiveAudioProcessor()
 	TsaraSynth::TsaraSound::Ptr sound (new TsaraSynth::TsaraSound (treeState));
     synthesiser.addSound (sound);
 
-    for (int i=0; i < nVoices; ++i)	// 1 voice for now
+	for (int i=0; i < nVoices; ++i)	{// 1 voice for now
         synthesiser.addVoice (new TsaraSynth::TsaraVoice (treeState));
+		voicesCreated = true;
+	}
 	jassert(nVoices == synthesiser.getNumVoices());
 	
 	// MAGIC GUI: add a meter at the output
@@ -49,14 +51,11 @@ Tsara_additiveAudioProcessor::Tsara_additiveAudioProcessor()
     {
 		loadButtonClicked();
     });
-//	magicState.createAttachment(<#const juce::String &paramID#>, <#juce::Button &button#>)
 	
 	outputMeter  = magicState.createAndAddObject<foleys::MagicLevelSource>("output");
     oscilloscope = magicState.createAndAddObject<foleys::MagicOscilloscope>("waveform");
     analyser     = magicState.createAndAddObject<foleys::MagicAnalyser>("analyser");
     magicState.addBackgroundProcessing (analyser);
-	
-
 }
 Tsara_additiveAudioProcessor::~Tsara_additiveAudioProcessor()
 {
@@ -97,11 +96,17 @@ void Tsara_additiveAudioProcessor::loadFile (const juce::File& file, unsigned in
 		ext = ext.removeCharacters(".");
 		std::string std_ext = ext.toStdString();
 		
+		
+		voicesCreated   = false;
+		
+		
 		if(TsaraSynth::TsaraVoice *const voice =
 		   dynamic_cast<TsaraSynth::TsaraVoice *>(synthesiser.getVoice(voiceIdx)) )
 		{
 			voice->loadPool( voice->file2pool(std_fn, std_ext) );
 		}
+		
+		voicesCreated = true;
 	}
 }
 //==============================================================================
@@ -237,6 +242,9 @@ void Tsara_additiveAudioProcessor::parameterChanged (const juce::String& param, 
 
 void Tsara_additiveAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+	if (!voicesCreated)
+		return;
+	
     juce::ScopedNoDenormals noDenormals;
 	auto blockSize = buffer.getNumSamples();
 	magicState.processMidiBuffer(midiMessages, blockSize, true);

@@ -28,42 +28,16 @@
 #include "Analysis.h"
 
 namespace nvs{
-typedef std::vector<std::vector<float>> pca_matrix_t;
- class sound_representation {
-private:
-	pca_matrix_t PCAmat;
-	std::vector<float> fundamental_freq_vec;
-	std::vector<float> voicedness_vec;
-	std::vector<float> loudness_vec;
-public:
-	bool verifyEqualLengths(){
-		size_t size = PCAmat.size();
-		bool equalLengths = (size == fundamental_freq_vec.size()) && (size = loudness_vec.size());
-		return equalLengths;
-	}
-	pca_matrix_t getPCAmat() const {return PCAmat;}
-	std::vector<float> getFundamentalFreqVec() const {return fundamental_freq_vec;}
-	std::vector<float> getVoicednessVec() const {return voicedness_vec;}
-	std::vector<float> getLoudnessVec() const {return loudness_vec;}
-	void setPCAmat(const pca_matrix_t &other){
-		PCAmat = other;
-	}
-	void setFundamentalFreqVec(std::vector<float> const &other){
-		fundamental_freq_vec = other;
-	}
-	void setVoicednessVec(std::vector<float> const &other){
-		voicedness_vec = other;
-	}
-	void setLoudnessVec(std::vector<float> const &other){
-		loudness_vec = other;
-	}
-};
+namespace sgt{	// stochastic graph traversal
+typedef std::vector<std::vector<essentia::Real>> multiDimRealVec_t;
+
 struct vertex_property{
 	double timestamp;
 	unsigned int cluster;
-	float fundamentalFreq;
-	float voicedness;
-	float loudness;
+	float const *fundamentalFreq;
+	float const *voicedness;
+	float const *loudness;
+	std::vector<float> const *PCAvec;
 };
 struct edge_property{
     float timbral_distance;
@@ -71,8 +45,7 @@ struct edge_property{
 	float pitch_distance;
 	float loudness_distance;
 };
-//typedef boost::property < boost::edge_weight_t, double > weight_prop_t;
-typedef boost::adjacency_list < boost::vecS, 		// out-edges, a Sequence or an AssociativeContainer
+typedef boost::adjacency_list < boost::vecS, // out-edges, a Sequence or an AssociativeContainer
 						boost::vecS, 		// vertices, a Sequence or a RandomAccessContainer
 						boost::directedS,
 						vertex_property,	// VertexProperty
@@ -92,57 +65,6 @@ static random_gen_t gen;
 
 static std::vector<float> processBarks(std::vector<float> const &x, size_t N);
 
-static sound_representation getSoundRepresentationFromPool(essentia::Pool const &p){
-	nvs::tsaraCommon common;
-	
-	const std::string globals_stereo_mode_str = tsaraCommon::getGlobalsString(tsaraCommon::globals_e::stereo_mode);
-	const std::string mono_str = p.getSingleStringPool().at(std::move(globals_stereo_mode_str));
-	tsaraCommon::stereoModes_e stMode_e = tsaraCommon::chanDescr2stereoModeEnumMap.at(std::move(mono_str));
-
-	std::string const barkStr = tsaraCommon::getLowlevelString(tsaraCommon::algo_e::bark, 0, stMode_e);
-
-	auto vReal = p.getVectorRealPool();
-	
-	std::vector<std::vector<float>> barkVec = vReal.at(barkStr);
-	essentia::Pool tmp_p;
-	for (auto &barkSpec : barkVec){
-		barkSpec = processBarks(barkSpec, 23UL);	// takes 4th root for loudness of bark bands
-	
-		tmp_p.add(barkStr, barkSpec);
-	}
-	
-	std::string const nsOut {"pca.bark"};
-	essentia::standard::Algorithm* pca = common.getFactory().create("PCA",
-							"dimensions", 11,
-							"namespaceIn", std::move(barkStr),
-							"namespaceOut", std::move(nsOut));
-	essentia::Pool pca_pool;
-	pca->input("poolIn").set(tmp_p);
-	pca->output("poolOut").set(pca_pool);
-	pca->compute();
-	// load essentia pool into data struct
-	// std::unique_ptr<nvs::AnalysisData> a_data = std::make_unique<nvs::AnalysisData>(p);	// do we even need this once we have PCA below?
-	const pca_matrix_t pca_mat = pca_pool.getVectorRealPool().at(nsOut);
-	
-	const auto freqs = p.getRealPool().at(tsaraCommon::getLowlevelString(tsaraCommon::algo_e::pitchYinProbabilistic_freqs, 0,stMode_e));
-	const auto voicedness = p.getRealPool().at(tsaraCommon::getLowlevelString(tsaraCommon::algo_e::pitchYinProbabilistic_voicedness ,0,stMode_e));
-	const auto loudness = p.getRealPool().at(tsaraCommon::getLowlevelString(tsaraCommon::algo_e::loudness,0 ,stMode_e));
-
-	sound_representation rep;
-	rep.setPCAmat(pca_mat);
-	rep.setFundamentalFreqVec(freqs);
-	rep.setVoicednessVec(voicedness);
-	rep.setLoudnessVec(loudness);
-	return rep;
-}
-// start essentia. this can be in small scope, we just need to fill a_data.
-static sound_representation getSoundRepresentationFromFile(std::string filename  = "/Users/nicholassolem/development/audio for analysis/mr sandman tiny.yaml"){
-	nvs::tsaraCommon common;
-	essentia::Pool p = common.file2pool(filename, "yaml");
-	
-	return getSoundRepresentationFromPool(p);
-}
-
 static std::optional<float> euc_distance(std::vector<float> const &x0, std::vector<float> const &x1){
 	if (x0.size() != x1.size()){
 		std::cerr << "euc_distance exit: size mismatch\n";
@@ -154,15 +76,15 @@ static std::optional<float> euc_distance(std::vector<float> const &x0, std::vect
 		float dif = (a - b);
 		return dif * dif;
 	};
-	std::transform(std::begin(x0), std::end(x0), std::begin(x1), std::begin(diff), op);
-	d = std::accumulate(std::begin(diff), std::end(diff), 0.f);
+	std::transform(x0.begin(), x0.end(), x1.begin(), diff.begin(), op);
+	d = std::accumulate(diff.begin(), diff.end(), 0.f);
 	d = std::sqrtf(d);
 	return d;
 }
-static float kullback_leibler_divergence(std::vector<float> const &x0, std::vector<float> const &x1){
+static std::optional<float> kullback_leibler_divergence(std::vector<float> const &x0, std::vector<float> const &x1){
 	if (x0.size() != x1.size()){
 		std::cerr << "kl divergence exit: size mismatch\n";
-		return -1.f;
+		return {};
 	}
 	std::vector<float> logRatio(x0.size());
 	float d = 0.f;
@@ -171,26 +93,9 @@ static float kullback_leibler_divergence(std::vector<float> const &x0, std::vect
 		float ratio = (p / q_lim);
 		return p * std::log(ratio);
 	};
-	std::transform(std::begin(x0), std::end(x0), std::begin(x1), std::begin(logRatio), op);
-	d = std::accumulate(std::begin(logRatio), std::end(logRatio), 0.f);
+	std::transform(x0.begin(), x0.end(), x1.begin(), logRatio.begin(), op);
+	d = std::accumulate(logRatio.begin(), logRatio.end(), 0.f);
 	return d;
-}
-static std::vector<float> splitBarks(std::vector<float> const &x, size_t N){
-	N = std::min(N, x.size());
-	return std::vector<float>(x.begin(), x.begin() + N);
-}
-static std::vector<float> barkLoudness(std::vector<float> const &x){
-	std::vector<float> y(x.size());
-	std::transform(std::begin(x), std::end(x), std::begin(y), [](const float& a){
-// "In each band we estimate a loudness contribution as the fourth root of the power on the band; this is close to a loudness measure sug- gested in (Rossing, Moore, and Wheeler 2002)". (puckette)
-		return std::sqrtf(std::sqrtf(a));
-	});
-	return y;
-}
-static std::vector<float> processBarks(std::vector<float> const &x, size_t N){
-	std::vector<float> v = splitBarks(x, N);
-	v = barkLoudness(v);
-	return v;
 }
 
 static std::vector<size_t> getRandomIndices(size_t maxValInclusive, size_t numVals = 100){
@@ -206,7 +111,7 @@ static std::vector<size_t> getRandomIndices(size_t maxValInclusive, size_t numVa
 	return randVec;
 }
 
-static float getMaxTimbralDistanceForConnection(pca_matrix_t const &pca_mat, float percentile = 0.15f, size_t nSearch = 100UL)	{
+static float getMaxTimbralDistanceForConnection(multiDimRealVec_t const &pca_mat, float percentile = 0.15f, size_t nSearch = 100UL)	{
 	const size_t numFrames = pca_mat.size();
 	nSearch = std::min(nSearch, numFrames);
 	std::vector<size_t> randIdx = getRandomIndices(numFrames-1, nSearch);
@@ -230,7 +135,7 @@ static float getMaxTimbralDistanceForConnection(pca_matrix_t const &pca_mat, flo
 
 	return maxDistanceForConnection;
 }
-static float getMaxTimbralDistanceForConnectionFromVertex(const vertex_descriptor_t v, pca_matrix_t const &pca_mat, float percentile = 0.15f, size_t nSearch = 100UL){
+static float getMaxTimbralDistanceForConnectionFromVertex(const vertex_descriptor_t v, multiDimRealVec_t const &pca_mat, float percentile = 0.15f, size_t nSearch = 100UL){
 	auto src_timbre = pca_mat[v];
 	const size_t numFrames = pca_mat.size();
 	nSearch = std::min(nSearch, numFrames);
@@ -319,18 +224,23 @@ static bool pitchDistanceInRange(float src_freq, float dst_freq, connectionHeuri
 		return (val < settings.maxPitchDeviationAbsolute);
 	}
 }
-static void reduceEdgesBasedOnDegree(DirectedGraph_t &dg){
-	// vertex iterator
-	
-	// get out degree of vertex
-}
+
 // create directed graph based on numFrames
-static DirectedGraph_t createGraphFromSoundRepresentation(sound_representation const &sound_rep, connectionHeuristics const settings = connectionHeuristics()){
-	const pca_matrix_t &pca_mat = sound_rep.getPCAmat();
-	const auto &freqs = sound_rep.getFundamentalFreqVec();
-	const auto &voicedness = sound_rep.getVoicednessVec();
-	const auto &loudness = sound_rep.getLoudnessVec();
+static DirectedGraph_t createGraphFromAnalysisData(AnalysisData const &data, connectionHeuristics const settings = connectionHeuristics()){
+	const multiDimRealVec_t &pca_mat = data.getPCAmat();
+	
+	
+	const auto &freqs = data.f0;
+	const auto &voicedness = data.voicedProbability;
+	const auto &loudness = data.loudness[0];
+	const auto &PCAs = data.getPCAmat();
 	const size_t numFrames = pca_mat.size();
+	
+	assert(freqs.size() == numFrames);
+	assert(voicedness.size() == numFrames);
+	assert(loudness.size() == numFrames);
+	assert(PCAs.size() == numFrames);
+
 	DirectedGraph_t dg(numFrames);
 
 	const size_t minimumConnections = settings.minimumConnections;
@@ -357,9 +267,10 @@ static DirectedGraph_t createGraphFromSoundRepresentation(sound_representation c
 	for (int src = 0; src < numFrames; ++src){
 		dg[src].timestamp = src;
 		dg[src].cluster = 0;
-		dg[src].fundamentalFreq = freqs[src];
-		dg[src].voicedness = voicedness[src];
-		dg[src].loudness = loudness[src];
+		dg[src].fundamentalFreq = &freqs[src];
+		dg[src].voicedness = &voicedness[src];
+		dg[src].loudness = &loudness[src];
+		dg[src].PCAvec = &PCAs[src];
 
 		float maxTimbralDistanceForConnection = getMaxTimbralDistanceForConnectionFromVertex(src, pca_mat, settings.timbralPercentile, settings.timbralNumSearch);
 		
@@ -373,32 +284,31 @@ static DirectedGraph_t createGraphFromSoundRepresentation(sound_representation c
 		//  would need the whole list (or more than the minumum few) just to throw away what's above the nth.
 		std::vector<idxAndEdgeProp> minimaIdxAndVals(minimumConnectionCandidates,
 											{ (size_t) 0, maximallyDistantEdgeProp } );
-		for (int dst = 0; dst < numFrames; ++dst){
+		for (int dst = 0; dst < numFrames; dst += int(1 + (numFrames / 1000))){
 			if (src == dst)
 				continue;
 			auto x1 = pca_mat[dst];
 			edge_property ep;
 			ep.temporal_distance = (float)std::abs(dst - src);
 			ep.timbral_distance = euc_distance(x0, x1).value_or(-1.f);
-			ep.pitch_distance = pitchDistanceRatio(dg[src].fundamentalFreq, freqs[dst]);
-			ep.loudness_distance = loudnessDistance(dg[src].loudness, loudness[dst]);
+			ep.pitch_distance = pitchDistanceRatio(*(dg[src].fundamentalFreq), freqs[dst]);
+			ep.loudness_distance = loudnessDistance(*(dg[src].loudness), loudness[dst]);
 			
-			auto maxOfMinVec = std::max_element(minimaIdxAndVals.begin(), minimaIdxAndVals.end(), idxAndEdgeProp_CmpByTimbre);
 			if ((ep.timbral_distance < maxTimbralDistanceForConnection)
-				& (pitchDistanceInRange(dg[src].fundamentalFreq, freqs[dst], settings))
+				& (pitchDistanceInRange(*(dg[src].fundamentalFreq), freqs[dst], settings))
 				& (ep.loudness_distance < maxLoudnessDev)
 				)
 			{
 				boost::add_edge(src, dst, ep, dg);
 				++num_connections_from_node;
 			}
-			else if (ep.timbral_distance < maxOfMinVec->second.timbral_distance){
+			else if (auto maxOfMins = std::max_element(minimaIdxAndVals.begin(), minimaIdxAndVals.end(), idxAndEdgeProp_CmpByTimbre); ep.timbral_distance < maxOfMins->second.timbral_distance){
 				// only add edge property to minimal list if it's not connected
-				maxOfMinVec->first = dst;
-				maxOfMinVec->second = ep;
+				maxOfMins->first = dst;
+				maxOfMins->second = ep;
 			}
 		}
-#if 0
+#if 1
 		if (num_connections_from_node < minimumConnections){
 			// fill 'minima to be used' with 'minimaIdxAndVals' whose indices correspond with smallest pitch differences.
 			// these will be the minima that are used.
@@ -412,6 +322,8 @@ static DirectedGraph_t createGraphFromSoundRepresentation(sound_representation c
 	}
 	return dg;
 }
+
+
 static void printGraph(DirectedGraph_t const &dg){
 	vertex_iterator_t vit, vend;
 	std::tie(vit, vend) = boost::vertices(dg);
@@ -425,10 +337,10 @@ static void printGraph(DirectedGraph_t const &dg){
 }
 static void printEdges(DirectedGraph_t &dg){
 	std::cout << "printing edges: \n";
-	for (std::pair<edge_iterator_t, edge_iterator_t>edgePair = edges(dg); edgePair.first != edgePair.second; ++edgePair.first)
+	for (auto [edge_st, edge_end] = edges(dg); edge_st != edge_end; ++edge_st)
 	{
-		dg[*(edgePair.first)].timbral_distance = 42;
-	   std::cout << *edgePair.first << " " << dg[*(edgePair.first)].timbral_distance << std::endl;
+		dg[*edge_st].timbral_distance = 42;
+	   std::cout << *edge_st << " " << dg[*edge_st].timbral_distance << '\n';
 	}
 	std::cout << "done printing edges\n";
 }
@@ -474,92 +386,48 @@ static vertex_descriptor_t traverseToNearestVertex(DirectedGraph_t &dg, vertex_i
 	return closestVertex;
 }
 static void printProbs(std::vector<double> const &probs){
-	const char on = '|';
-	const char off = '_';
-	for (auto d : probs){
-		const unsigned int val = static_cast<unsigned int>((d * 10.0) + 0.5);
-		for (unsigned i = 0; i < val; ++i)
-			std::cout << on;
-		for (unsigned i = 0; i < (10 - val); ++i)
-			std::cout << off;
-		std::cout << ' ';
-	}
-	std::cout << '\n';
+	for (auto &p : probs)
+		std::cout << p << ' ';
+	std::cout << ";\n";
 }
-static inline size_t rollWeightedDie(std::vector<double> const &probabilities, double power = 1.0) {
-	std::vector<double> tmp(probabilities.size());
-	double min = *(std::min_element(probabilities.begin(), probabilities.end()));
-	double max = *(std::max_element(probabilities.begin(), probabilities.end()));
-	std::transform(probabilities.begin(), probabilities.end(), tmp.begin(), [min, max](double x){
-		const double rng = max - min;
-		if (rng > 0.0){
-			x -= min;
-			x /= rng;
-		} else {
-			std::cerr << "0 range?!\n";
-		}
-		return x;
-	});
-	
-	const static auto func1 = [power](const double x){
+static inline void exaggerateProbabilities(std::vector<double> &probs, double power){
+	std::transform(probs.begin(), probs.end(), probs.begin(), [power](const double x){
 		double xpt = std::pow(x, power);
 		double mxpt = std::pow((1.0 - x), power);
 		return xpt / (xpt + mxpt);
-	};
-	const static auto func2 = [power](const double x){
-		return std::exp(x * power);
-	};
-	std::transform(tmp.begin(), tmp.end(), tmp.begin(), func2);
-	
-	double sum = std::accumulate(tmp.begin(), tmp.end(), 0.0);
+	});
+}
+static inline void normalizeProbabilities(std::vector<double> &probs){
+	double sum = std::accumulate(probs.begin(), probs.end(), 0.0);
 	if (sum > 0.0){
-		std::transform(tmp.begin(), tmp.end(), tmp.begin(), [sum](const double d){
+		std::transform(probs.begin(), probs.end(), probs.begin(), [sum](const double d){
 			return d / sum;
 		});
 	}
-	printProbs(tmp);
-	
-	discrete_distr_t dist(std::begin(tmp), std::end(tmp));
+}
+static inline size_t rollWeightedDie(std::vector<double> const &probs) {
+	discrete_distr_t dist(probs.begin(), probs.end());
 	// HERE is where it matters that i'm changing the gaussian
 	boost::variate_generator< random_gen_t&, discrete_distr_t > weightsampler(gen, dist);
 	return weightsampler();
 }
 static inline std::vector<double> getProbabilitiesFromCurrentNode(DirectedGraph_t const &dg, vertex_descriptor_t current_vertex, const float C_kernelScaling){
 	int i = 0;
-	auto es = boost::out_edges(current_vertex, dg);
-	const size_t num_options = es.second - es.first;
+	auto [out_edge_st, out_edge_end] = boost::out_edges(current_vertex, dg);
+	const size_t num_options = out_edge_end - out_edge_st;
 	std::vector<double> probabilities(num_options);
 	
-	for (auto eit = es.first; eit != es.second; ++eit) {
-//            std::cout << boost::source(*eit, g) << ' ' << boost::target(*eit, g) << std::endl;
+	for (auto eit = out_edge_st; eit != out_edge_end; ++eit) {
 		edge_property *e_prop = (edge_property *)eit->get_property();
-//            std::cout << hgf->edge_weight << std::endl;
-//            probabilities.push_back(hgf->edge_weight);
 		double distance = e_prop->timbral_distance;
-//		distance = std::max(distance, 0.000000001);
-		probabilities[i] = std::exp(-(distance*distance) / 2.0 * (C_kernelScaling*C_kernelScaling));
+		probabilities[i] = std::exp(-(distance*distance) / (2.0 * (C_kernelScaling*C_kernelScaling)));
 		i++;
 	}
-	
-	double sum = std::accumulate(probabilities.begin(), probabilities.end(), 0.0);
-	if (sum > 0.0){
-		std::transform(probabilities.begin(), probabilities.end(), probabilities.begin(),
-		[sum](const double d){
-			return d / sum;
-		});
-	}
-	
 	return probabilities;
 }
-static vertex_descriptor_t traverseToRandomVertex(DirectedGraph_t &dg, vertex_descriptor_t current_vertex, const float C_kernelScaling = 12.f, double probPower = 1.0){
-//        std::cout << "current node: " << g[current_node].name << "\n";
-		//this->previous_node = this->current_node;
-	std::pair<adjacency_iter_t, adjacency_iter_t> adjacent_verts = boost::adjacent_vertices(current_vertex, dg);
-	adjacency_iter_t current_adjacent = adjacent_verts.first;
-	adjacency_iter_t last_adjacent = adjacent_verts.second;
-
-	std::vector<double> probabilities = getProbabilitiesFromCurrentNode(dg, current_vertex, C_kernelScaling);
-
+static vertex_descriptor_t traverseToRandomVertex(DirectedGraph_t &dg, vertex_descriptor_t current_vertex, const float C_kernelScaling = .01f, double probPower = 1.0){
+	
+	auto [current_adjacent, last_adjacent] = boost::adjacent_vertices(current_vertex, dg);
 	// IF NUM OPTIONS IS 0, 2 PROBLEMS:
 	// WE GET A SIZE 0 VECTOR
 	// THE TRAVERSAL WILL ALWAYS SELF-TRANSITION
@@ -567,22 +435,18 @@ static vertex_descriptor_t traverseToRandomVertex(DirectedGraph_t &dg, vertex_de
 	if (num_options == 0){
 		return current_vertex;
 	}
+	std::vector<double> probs = getProbabilitiesFromCurrentNode(dg, current_vertex, C_kernelScaling);
+	exaggerateProbabilities(probs, probPower);
+	normalizeProbabilities(probs);
+	
 	std::vector<vertex_descriptor_t> next_vertices_options(num_options);
-
 	for (; current_adjacent != last_adjacent; ++current_adjacent){
 		// this method counts down
 		size_t idx = last_adjacent - current_adjacent - 1;
-//            next_vertices_options.push_back(*current_adjacent);
-//            std::cout << "adj diff: " << last_adjacent - current_adjacent << std::endl;
 		next_vertices_options[idx] = *current_adjacent;
-//            std::cout << "adjacent to node" << current_node << ": " << *current_adjacent << "\n";
 	}
-
-	size_t new_idx = rollWeightedDie(probabilities, probPower);
-	//    this->current_node = next_vertices_options[new_idx];
+	size_t new_idx = rollWeightedDie(probs);
 	vertex_descriptor_t next_node = next_vertices_options[new_idx];
-//        if (next_node > num_nodes){ std::cerr << "NODE ABOVE LIMITS" << "\n"; }
-//        std::cout << "next node: " << next_node << "new idx: " << new_idx << "\n";
 	return next_node;
 }
 static void reduceEdges(DirectedGraph_t &dg, double percentile = 0.5){
@@ -653,7 +517,7 @@ static void exportGraphAsDot(DirectedGraph_t &dg, std::string const &filename){
 	strm.rdbuf (strm_buffer);
 }
 
-
+} // end namespace sgt
 } // end namespace nvs
 
 #endif /* graph_h */
