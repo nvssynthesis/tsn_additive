@@ -16,7 +16,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     TsaraSynth::addAdditiveParameters(layout);
 	TsaraSynth::addNavigationParameters(layout);
     TsaraSynth::addGainParameters (layout);
-    return layout;
+	TsaraSynth::addDimensionalParameters(layout);
+	return layout;
 }
 
 //==============================================================================

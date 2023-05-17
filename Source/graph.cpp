@@ -384,3 +384,8 @@
 	// restore old output buffer
 	strm.rdbuf (strm_buffer);
 }
+
+class nvs::sgt::StatefulDirectedGraph{
+	nvs::sgt::DirectedGraph_t m_dg;
+};
+

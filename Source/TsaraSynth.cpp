@@ -12,7 +12,6 @@
 #define USING_JUCE_ADSR 1
 
 
-
 //==============================================================================
 
 int TsaraSynth::numOscillators = 8;
@@ -113,18 +112,53 @@ void TsaraSynth::addNavigationParameters (juce::AudioProcessorValueTreeState::Pa
 																 "Probability Power", probPowerRange,
 																 1.f);	// default
 	
-	auto wander = std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(IDs::paramNavigationStyle, 1), //param ID
+	auto navStyle = std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(IDs::paramNavigationStyle, 1), //param ID
 															   "Navigation Style",
 															   juce::StringArray (navTypeToString.at((navigationTypes_e)0),
 																				  navTypeToString.at((navigationTypes_e)1)),
 															   0);	// default choice
 	group->addChild(std::move(location));
 	group->addChild(std::move(traversalSpeed));
-	group->addChild(std::move(wander));
+	group->addChild(std::move(navStyle));
 	group->addChild(std::move(probPower));
 	group->addChild(std::move(gaussianKernel));
 	layout.add(std::move(group));
 }
+
+void TsaraSynth::addDimensionalParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
+{
+    auto group = std::make_unique<juce::AudioProcessorParameterGroup>("dimensions", "Dimensions", "|");
+
+	auto range01 = juce::NormalisableRange<float> (0.f, 1.f, 0.f);
+	
+	auto d0 = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramD0, 1), // param ID
+														  "Dimension 0",
+														  range01,
+														  0.5f);	// default
+	auto d1 = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramD1, 1), // param ID
+														  "Dimension 1",
+														  range01,
+														  0.5f);	// default
+	auto d2 = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramD2, 1), // param ID
+														  "Dimension 2",
+														  range01,
+														  0.5f);	// default
+	auto d3 = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramD3, 1), // param ID
+														  "Dimension 3",
+														  range01,
+														  0.5f);	// default
+	auto d4 = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramD4, 1), // param ID
+														  "Dimension 4",
+														  range01,
+														  0.5f);	// default
+	group->addChild(std::move(d0));
+	group->addChild(std::move(d1));
+	group->addChild(std::move(d2));
+	group->addChild(std::move(d3));
+	group->addChild(std::move(d4));
+	layout.add(std::move(group));
+}
+
 void TsaraSynth::addGainParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
 {
     auto gain  = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID (IDs::paramGain, 1), "Gain", juce::NormalisableRange<float> (0.0f, 8.0f, 0.001f), 0.70f);
@@ -199,6 +233,16 @@ TsaraSynth::TsaraVoice::TsaraVoice (juce::AudioProcessorValueTreeState& state)
 	jassert(voice_C_kernelScaling);
 	voiceProbPower = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramProbPower));
 	jassert(voiceProbPower);
+	voiceD0 = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramD0));
+	jassert(voiceD0);
+	voiceD1 = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramD1));
+	jassert(voiceD1);
+	voiceD2 = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramD2));
+	jassert(voiceD2);
+	voiceD3 = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramD3));
+	jassert(voiceD3);
+	voiceD4 = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramD4));
+	jassert(voiceD4);
 	
     voiceBuffer.setSize (1, internalBufferSize);
 }
@@ -282,7 +326,7 @@ void TsaraSynth::TsaraVoice::controllerMoved (int controllerNumber, int newContr
     juce::ignoreUnused (controllerNumber, newControllerValue);
 }
 
-nvs::tsaraCommon::sineModelTimbre TsaraSynth::TsaraVoice::getSineModelTimbre(){
+nvs::tsaraCommon::sineModelTimbre TsaraSynth::TsaraVoice::getSineModelTimbre() const {
 	nvs::tsaraCommon::sineModelTimbre timbre;
 	timbre.tranposeFreqs = voiceTranspose->get();
 	timbre.stretchFreqs = voiceStretch->get();
@@ -290,6 +334,18 @@ nvs::tsaraCommon::sineModelTimbre TsaraSynth::TsaraVoice::getSineModelTimbre(){
 	timbre.tiltFreqs = voiceTilt->get();
 	
 	return timbre;
+}
+std::vector<float> TsaraSynth::TsaraVoice::getTargetDimensions() const {
+	size_t const N = 5;
+	std::vector<float> v(N);
+	
+	v[0] = voiceD0->get();
+	v[1] = voiceD1->get();
+	v[2] = voiceD2->get();
+	v[3] = voiceD3->get();
+	v[4] = voiceD4->get();
+	
+	return v;
 }
 
 void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBuffer,
@@ -308,16 +364,24 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 
 	setTimbre( getSineModelTimbre() );
 	navPhasor.setFrequency(getTraversalSpeed());
+	
 
+	
 	float C_kernelScaling = voice_C_kernelScaling->get();
 	double probPower = static_cast<double>(voiceProbPower->get());
 
 	if (shouldSelectNewFrame){
-		nvs::sgt::DirectedGraph_t::vertex_descriptor vd = nvs::sgt::traverseToRandomVertex(*dg, *initialTargetVit, C_kernelScaling, probPower);
-		initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
-
-		jassert(vd != getNumFrames() );
-		initialTargetFrame = vd;
+		navigationTypes_e const navType = getNavigationType();
+		if (navType == navigationTypes_e::wander){
+			nvs::sgt::DirectedGraph_t::vertex_descriptor vd = nvs::sgt::traverseToRandomVertex(*dg, *initialTargetVit, C_kernelScaling, probPower);
+			initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
+			initialTargetFrame = vd;
+		}
+		else if (navType == navigationTypes_e::attract)
+		{
+			std::vector<float> const dimen = getTargetDimensions();
+			initialTargetFrame = getAnalysisData().searchPCAunnormalized(dimen);
+		}
 		requestNextTargetFrame(initialTargetFrame); // sets isCaughtUpToCurrentFrame(FALSE)
 
 //		std::cout << "targetFrame: "<< initialTargetFrame << '\n';

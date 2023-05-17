@@ -33,13 +33,19 @@ namespace IDs
 	static juce::String param_C_kernel { "gaussian width" };
 	static juce::String paramProbPower { "probability power" };
 	static juce::String paramNavigationStyle 	{ "wander" };
+
+	static juce::String paramD0		{ "dimension 0" };
+	static juce::String paramD1		{ "dimension 1" };
+	static juce::String paramD2		{ "dimension 2" };
+	static juce::String paramD3		{ "dimension 3" };
+	static juce::String paramD4		{ "dimension 4" };
 }
 enum class navigationTypes_e {
-	adjacent = 0,
+	attract = 0,
 	wander
 };
 static const std::map<navigationTypes_e, juce::String> navTypeToString{
-	{navigationTypes_e::adjacent, 	"adjacent"},
+	{navigationTypes_e::attract, 	"attract"},
 	{navigationTypes_e::wander, 	"wander"}
 };
 
@@ -53,9 +59,9 @@ public:
     static void addAdditiveParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);
     static void addGainParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout);
 	static void addNavigationParameters(juce::AudioProcessorValueTreeState::ParameterLayout& layout);
-	
+	static void addDimensionalParameters(juce::AudioProcessorValueTreeState::ParameterLayout& layout);
+
     TsaraSynth() = default;
-	
 	
 	
 	void blockwiseCallback();
@@ -106,7 +112,8 @@ public:
 		
 		void loadPool(const essentia::Pool &p) override;
     private:
-		nvs::tsaraCommon::sineModelTimbre getSineModelTimbre();
+		nvs::tsaraCommon::sineModelTimbre getSineModelTimbre() const;
+		std::vector<float> getTargetDimensions() const;
 		inline float getTraversalSpeed() const;
 		inline navigationTypes_e getNavigationType() const;
 
@@ -184,6 +191,12 @@ public:
 		juce::AudioParameterChoice* voiceNavigationStyle= nullptr;
 		juce::AudioParameterFloat* voiceProbPower	= nullptr;
 		juce::AudioParameterFloat* voice_C_kernelScaling= nullptr;
+		
+		juce::AudioParameterFloat* voiceD0	= nullptr;
+		juce::AudioParameterFloat* voiceD1	= nullptr;
+		juce::AudioParameterFloat* voiceD2	= nullptr;
+		juce::AudioParameterFloat* voiceD3	= nullptr;
+		juce::AudioParameterFloat* voiceD4	= nullptr;
 
 		juce::AudioParameterFloat*  voiceGain = nullptr;
         float                       lastVoiceGain = 0.0;
