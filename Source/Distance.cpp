@@ -14,8 +14,8 @@
 //namespace dst {
 
 std::optional<float> nvs::dst::euc_distance(std::vector<float> const &x0, std::vector<float> const &x1){
-	if (x0.size() != x1.size()){
-		std::cerr << "euc_distance exit: size mismatch\n";
+	if (x0.size() > x1.size()){
+		std::cerr << "euc_distance exit: erroneous size mismatch\n";
 		return {};
 	}
 	std::vector<float> diff(x0.size());

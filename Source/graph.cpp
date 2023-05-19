@@ -9,23 +9,12 @@
 
 #include "graph.h"
 
- std::vector<size_t> nvs::sgt::getRandomIndices(size_t maxValInclusive, size_t numVals) {
-//	std::random_device rd; // obtain a random number from hardware
-//	std::mt19937 gen(rd()); // seed the generator
-	std::uniform_int_distribution<size_t> distr(0, maxValInclusive); // define the range
-	
-	std::vector<size_t> randVec (numVals, 0);
-	for(size_t n = 0; n < numVals; ++n){
-		size_t val = distr(gen);
-		randVec[n] = val;
-	}
-	return randVec;
-}
+
 
  float nvs::sgt::getMaxTimbralDistanceForConnection(multiDimRealVec_t const &pca_mat, float percentile, size_t nSearch){
 	const size_t numFrames = pca_mat.size();
 	nSearch = std::min(nSearch, numFrames);
-	std::vector<size_t> randIdx = getRandomIndices(numFrames-1, nSearch);
+	std::vector<size_t> randIdx = nvs::rand::getRandomIndices(numFrames-1, nSearch);
 	std::vector<float> distances;
 	for (int src = 0; src < nSearch; ++src){
 		auto x0 = pca_mat[randIdx[src]];
@@ -51,7 +40,7 @@
 	auto src_timbre = pca_mat[v];
 	const size_t numFrames = pca_mat.size();
 	nSearch = std::min(nSearch, numFrames);
-	std::vector<size_t> randIdx = getRandomIndices(numFrames-1, nSearch);
+	std::vector<size_t> randIdx = nvs::rand::getRandomIndices(numFrames-1, nSearch);
 	std::vector<float> distances;
 	distances.reserve(nSearch);
 	for (auto dst = 0; dst < nSearch; ++dst){
@@ -69,7 +58,7 @@
  float nvs::sgt::getMaxLoudnessDistanceForConnection(std::vector<float> const &loudnessVec, float percentile, size_t nSearch){
 	const size_t numFrames = loudnessVec.size();
 	nSearch = std::min(nSearch, numFrames);
-	std::vector<size_t> randIdx = nvs::sgt::getRandomIndices(numFrames-1, nSearch);
+	std::vector<size_t> randIdx = nvs::rand::getRandomIndices(numFrames-1, nSearch);
 	std::vector<float> distances;
 	for (int src = 0; src < nSearch; ++src){
 		auto x0 = loudnessVec[randIdx[src]];
@@ -87,7 +76,15 @@
 	return maxDistanceForConnection;
 }
 
-
+// currently an O(N^2) algorithm...
+// -first a small search with random selection of nodes is used to
+//		estimate absolute max timbral distance for given percentile
+// -then each node searches through each other node and connects with any less than that distance.
+// -along the way we do track the minimum distances
+// - if the number of connections is less than a minimum number of connections,
+//		we connect the closest of that list of minimum distances.
+// if there is any kind of qeue to convert this to a linear search,
+//		even with small compromise of accuracy, that would be great.
  nvs::sgt::DirectedGraph_t nvs::sgt::createGraphFromAnalysisData(AnalysisData const &data, connectionHeuristics const settings){
 	const multiDimRealVec_t &pca_mat = data.PCAmat;
 	
@@ -269,12 +266,7 @@
 		});
 	}
 }
- inline size_t nvs::sgt::rollWeightedDie(std::vector<double> const &probs) {
-	nvs::sgt::discrete_distr_t dist(probs.begin(), probs.end());
-	// HERE is where it matters that i'm changing the gaussian
-	boost::variate_generator< nvs::sgt::random_gen_t&, nvs::sgt::discrete_distr_t > weightsampler(gen, dist);
-	return weightsampler();
-}
+
 
  inline std::vector<double> nvs::sgt::getProbabilitiesFromCurrentNode(nvs::sgt::DirectedGraph_t const &dg, nvs::sgt::vertex_descriptor_t current_vertex, const float C_kernelScaling){
 	int i = 0;
@@ -311,7 +303,7 @@
 		size_t idx = last_adjacent - current_adjacent - 1;
 		next_vertices_options[idx] = *current_adjacent;
 	}
-	size_t new_idx = rollWeightedDie(probs);
+	size_t new_idx = nvs::rand::rollWeightedDie(probs);
 	vertex_descriptor_t next_node = next_vertices_options[new_idx];
 	return next_node;
 }

@@ -115,7 +115,8 @@ void TsaraSynth::addNavigationParameters (juce::AudioProcessorValueTreeState::Pa
 	auto navStyle = std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(IDs::paramNavigationStyle, 1), //param ID
 															   "Navigation Style",
 															   juce::StringArray (navTypeToString.at((navigationTypes_e)0),
-																				  navTypeToString.at((navigationTypes_e)1)),
+																				  navTypeToString.at((navigationTypes_e)1),
+																				  navTypeToString.at((navigationTypes_e)2)),
 															   0);	// default choice
 	group->addChild(std::move(location));
 	group->addChild(std::move(traversalSpeed));
@@ -380,7 +381,30 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 		else if (navType == navigationTypes_e::attract)
 		{
 			std::vector<float> const dimen = getTargetDimensions();
-			initialTargetFrame = getAnalysisData().searchPCAunnormalized(dimen);
+			initialTargetFrame = getAnalysisData().searchPCAfromPermutation(dimen, 500);
+		}
+		else if (navType == navigationTypes_e::greedyToPCA)
+		{
+			// get desired PCA dimensions
+			std::vector<float> const dimen = getTargetDimensions();
+			const float maximal_dist = std::numeric_limits<float>::max();
+			float least_dist = maximal_dist;
+			// get adjacent vertices
+			nvs::sgt::adjacency_iter_t ait, ait_end;
+			nvs::sgt::DirectedGraph_t::vertex_descriptor vd;
+			
+			// actually i should check if self-transition would be less distance to the desired PCA
+			for (std::tie(ait, ait_end) = boost::adjacent_vertices(*initialTargetVit, *dg); ait != ait_end; ++ait) {
+				const std::vector<float> &x1 = getAnalysisData().PCAmat[(*ait)];
+				std::optional<float> dist_opt = nvs::dst::euc_distance(dimen, x1);
+				float dist = dist_opt.value_or(maximal_dist);
+				if (dist < least_dist){
+					least_dist = dist;
+					vd = *ait;
+				}
+			}
+			initialTargetFrame = vd;
+			initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
 		}
 		requestNextTargetFrame(initialTargetFrame); // sets isCaughtUpToCurrentFrame(FALSE)
 
@@ -450,6 +474,6 @@ float TsaraSynth::TsaraVoice::getTraversalSpeed() const {
 }
 navigationTypes_e TsaraSynth::TsaraVoice::getNavigationType() const {
 	auto choice = voiceNavigationStyle->getIndex();
-	jassert((int(choice) == 0) || (int(choice) == 1));
+	jassert((int(choice) >= 0) && (int(choice) < (int)navigationTypes_e::count));
 	return (navigationTypes_e)choice;
 }

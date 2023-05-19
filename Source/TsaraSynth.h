@@ -32,7 +32,7 @@ namespace IDs
 	static juce::String paramTraversalSpeed	{ "traversal speed" };
 	static juce::String param_C_kernel { "gaussian width" };
 	static juce::String paramProbPower { "probability power" };
-	static juce::String paramNavigationStyle 	{ "wander" };
+	static juce::String paramNavigationStyle 	{ "navigation style" };
 
 	static juce::String paramD0		{ "dimension 0" };
 	static juce::String paramD1		{ "dimension 1" };
@@ -42,11 +42,14 @@ namespace IDs
 }
 enum class navigationTypes_e {
 	attract = 0,
-	wander
+	wander,
+	greedyToPCA,
+	count
 };
 static const std::map<navigationTypes_e, juce::String> navTypeToString{
 	{navigationTypes_e::attract, 	"attract"},
-	{navigationTypes_e::wander, 	"wander"}
+	{navigationTypes_e::wander, 	"wander"},
+	{navigationTypes_e::greedyToPCA, 	"greedyToPCA"}
 };
 
 class TsaraSynth

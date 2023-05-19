@@ -11,21 +11,16 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
-#include <random>
 #include <array>
 #include <limits>
 #include <boost/config.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graphviz.hpp>
-#include <boost/random/mersenne_twister.hpp>
-#include <boost/random/uniform_int_distribution.hpp>
-#include <boost/math/distributions/normal.hpp>
-#include <boost/random/discrete_distribution.hpp>
-#include <boost/random/normal_distribution.hpp>
-#include <boost/random/variate_generator.hpp>
-#include <boost/random/uniform_int.hpp>
 #include <boost/core/span.hpp>
+
+#include "Random.h"
 #include "Analysis.h"
+
 namespace nvs {
 namespace sgt {
 struct connectionHeuristics;
@@ -63,10 +58,6 @@ typedef DirectedGraph_t::vertex_descriptor vertex_descriptor_t;
 typedef DirectedGraph_t::vertex_iterator vertex_iterator_t;
 typedef DirectedGraph_t::edge_descriptor edge_descriptor_t;
 
-typedef boost::random::mt19937 random_gen_t;
-typedef boost::random::discrete_distribution<size_t,double> discrete_distr_t;
-typedef boost::normal_distribution<double> normal_distr_t;
-
 struct connectionHeuristics{
 	float timbralPercentile {0.12f};
 	size_t timbralNumSearch {100UL};
@@ -79,11 +70,7 @@ struct connectionHeuristics{
 	size_t minimumConnectionCandidates {18};
 };
 
-static random_gen_t gen;
 
-//static std::vector<float> processBarks(std::vector<float> const &x, size_t N);
-
-std::vector<size_t> getRandomIndices(size_t maxValInclusive, size_t numVals = 100);
 
 float getMaxTimbralDistanceForConnection(multiDimRealVec_t const &pca_mat, float percentile = 0.15f, size_t nSearch = 100UL);
 float getMaxTimbralDistanceForConnectionFromVertex(const vertex_descriptor_t v, multiDimRealVec_t const &pca_mat, float percentile = 0.15f, size_t nSearch = 100UL);
@@ -106,7 +93,6 @@ inline std::vector<double> getProbabilitiesFromCurrentNode(DirectedGraph_t const
 inline void exaggerateProbabilities(std::vector<double> &probs, double power);
 inline void normalizeProbabilities(std::vector<double> &probs);
 
-inline size_t rollWeightedDie(std::vector<double> const &probs);
 
 vertex_descriptor_t traverseToRandomVertex(DirectedGraph_t &dg, vertex_descriptor_t current_vertex, const float C_kernelScaling = .01f, double probPower = 1.0);
 
