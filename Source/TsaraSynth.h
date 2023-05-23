@@ -27,6 +27,8 @@ namespace IDs
     static juce::String paramTilt    	{ "tilt" };
     static juce::String paramSpecStretch{ "spectral stretch" };
     static juce::String paramShift    	{ "frequency shift" };
+	static juce::String paramStocf    	{ "stocf" };
+	static juce::String paramTonalStochRatio_e {"tonal:stochastic ratio"};
 
 	static juce::String paramLocation	{ "location" };
 	static juce::String paramTraversalSpeed	{ "traversal speed" };
@@ -116,6 +118,7 @@ public:
 		void loadPool(const essentia::Pool &p) override;
     private:
 		nvs::tsaraCommon::sineModelTimbre getSineModelTimbre() const;
+		nvs::tsaraCommon::sinePlusStochasticTimbre getSinePlusStochasticTimbre() const;
 		std::vector<float> getTargetDimensions() const;
 		inline float getTraversalSpeed() const;
 		inline navigationTypes_e getNavigationType() const;
@@ -188,6 +191,8 @@ public:
 		juce::AudioParameterFloat* voiceTilt 		= nullptr;
 		juce::AudioParameterFloat* voiceStretch 	= nullptr;
 		juce::AudioParameterFloat* voiceShift 		= nullptr;
+		juce::AudioParameterFloat* voiceStocF		= nullptr;
+		juce::AudioParameterFloat* voiceStocTonalRat= nullptr;
 		
 		juce::AudioParameterFloat* voiceNavigation	= nullptr;
 		juce::AudioParameterFloat* voiceTraversalSpeed 	= nullptr;

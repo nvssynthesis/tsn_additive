@@ -70,10 +70,19 @@ void TsaraSynth::addAdditiveParameters (juce::AudioProcessorValueTreeState::Para
 	auto shift = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramShift, 1), "Spectral Shift", juce::NormalisableRange<float> (	grabShift(tsaraCommon::baseTimbre::pMapIdx::min_e),
 											grabShift(tsaraCommon::baseTimbre::pMapIdx::max_e), 0.0f),
 											grabShift(tsaraCommon::baseTimbre::pMapIdx::def_e), hzAttr);	// in hertz
+	
+
+	auto stocf = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramStocf, 1), "Stocf",
+															 juce::NormalisableRange<float> (0.f, 1.f, 0.f), 0.2f);
+	auto tonalStocRat =std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(IDs::paramTonalStochRatio_e, 1), "Tonal:Stochastic",
+										juce::NormalisableRange<float> (0.f, 1.f, 0.f), 0.2f);
+	
 	group->addChild(std::move(transpose));
 	group->addChild(std::move(tilt));
 	group->addChild(std::move(stretch));
 	group->addChild(std::move(shift));
+	group->addChild(std::move(stocf));
+	group->addChild(std::move(tonalStocRat));
 
 	layout.add (std::move (group));
 }
@@ -209,8 +218,10 @@ TsaraSynth::TsaraVoice::TsaraVoice (juce::AudioProcessorValueTreeState& state)
 :	navPhasor(*this)
 {
 //	const std::string fn =  "/Users/nicholassolem/development/audio for analysis/blood is life.yaml";
-	const std::string fn = "/Users/nicholassolem/development/audio for analysis/Nannou_clip_mono.yaml";
+	const std::string fn = //"/Users/nicholassolem/development/audio for analysis/Nannou_clip_mono.yaml";
+		"/Users/nicholassolem/development/audio for analysis/plucked/Viola.pizz.ff.sulA.Db5.stereo.yaml";
 	// "/Users/nicholassolem/development/audio for analysis/sine, saw, noise.yaml"
+	
 	essentia::Pool const p = file2pool(fn, "yaml");
 	loadPool(p);
 
@@ -224,6 +235,11 @@ TsaraSynth::TsaraVoice::TsaraVoice (juce::AudioProcessorValueTreeState& state)
 	jassert(voiceShift);
 	voiceStretch = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramSpecStretch));
 	jassert(voiceStretch);
+	voiceStocF = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramStocf));
+	jassert(voiceStocF);
+	voiceStocTonalRat = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramTonalStochRatio_e));
+	jassert(voiceStocTonalRat);
+	
 	voiceNavigation = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(IDs::paramLocation));
 	jassert(voiceNavigation);
 	voiceTraversalSpeed = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter (IDs::paramTraversalSpeed));
@@ -336,6 +352,15 @@ nvs::tsaraCommon::sineModelTimbre TsaraSynth::TsaraVoice::getSineModelTimbre() c
 	
 	return timbre;
 }
+nvs::tsaraCommon::sinePlusStochasticTimbre TsaraSynth::TsaraVoice::getSinePlusStochasticTimbre() const {
+	nvs::tsaraCommon::sinePlusStochasticTimbre timbre;
+	timbre.tranposeFreqs = voiceTranspose->get();
+	timbre.stretchFreqs = voiceStretch->get();
+	timbre.shiftFreqs = voiceShift->get();
+	timbre.tiltFreqs = voiceTilt->get();
+	
+	return timbre;
+}
 std::vector<float> TsaraSynth::TsaraVoice::getTargetDimensions() const {
 	size_t const N = 5;
 	std::vector<float> v(N);
@@ -363,9 +388,14 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 	auto jChan = outputBuffer.getNumChannels();
 	auto sChan = getNumChans();
 
-	setTimbre( getSineModelTimbre() );
-	navPhasor.setFrequency(getTraversalSpeed());
+	auto synthType = SynthesisContainer::sc_synthType;
+	if (synthType == nvs::synthesisTypes_e::sinePlusStochastic){
+		setTimbre(getSinePlusStochasticTimbre() );
+	} else if (synthType == nvs::synthesisTypes_e::sineModel) {
+		setTimbre( getSineModelTimbre() );
+	}
 	
+	navPhasor.setFrequency(getTraversalSpeed());
 
 	
 	float C_kernelScaling = voice_C_kernelScaling->get();
@@ -381,7 +411,8 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 		else if (navType == navigationTypes_e::attract)
 		{
 			std::vector<float> const dimen = getTargetDimensions();
-			initialTargetFrame = getAnalysisData().searchPCAfromPermutation(dimen, 500);
+//			initialTargetFrame = getAnalysisData().searchPCAfromPermutation(dimen, 500);
+			initialTargetFrame = getAnalysisData().searchPCA(dimen);
 		}
 		else if (navType == navigationTypes_e::greedyToPCA)
 		{

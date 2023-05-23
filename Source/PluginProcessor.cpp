@@ -260,6 +260,8 @@ void Tsara_additiveAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
 	
 	buffer.applyGain(2.f);
 	
+	juce::jlimit<float>(-2.f, 2.f, 1.f);
+	
 	// MAGIC GUI: send the finished buffer to the level meter
     outputMeter->pushSamples (buffer);
     oscilloscope->pushSamples (buffer);
