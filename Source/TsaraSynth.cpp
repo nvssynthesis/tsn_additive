@@ -171,7 +171,7 @@ void TsaraSynth::addDimensionalParameters (juce::AudioProcessorValueTreeState::P
 
 void TsaraSynth::addGainParameters (juce::AudioProcessorValueTreeState::ParameterLayout& layout)
 {
-    auto gain  = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID (IDs::paramGain, 1), "Gain", juce::NormalisableRange<float> (0.0f, 8.0f, 0.001f), 0.70f);
+    auto gain  = std::make_unique<juce::AudioParameterFloat>(juce::ParameterID (IDs::paramGain, 1), "Gain", juce::NormalisableRange<float> (0.0f, 2.0f, 0.001f), 0.70f);
 
     layout.add (std::make_unique<juce::AudioProcessorParameterGroup>("output", "Output", "|", std::move (gain)));
 }
@@ -358,6 +358,8 @@ nvs::tsaraCommon::sinePlusStochasticTimbre TsaraSynth::TsaraVoice::getSinePlusSt
 	timbre.stretchFreqs = voiceStretch->get();
 	timbre.shiftFreqs = voiceShift->get();
 	timbre.tiltFreqs = voiceTilt->get();
+	timbre.stocF = voiceStocF->get();
+	timbre.tonalStochRatio = voiceStocF->get();
 	
 	return timbre;
 }

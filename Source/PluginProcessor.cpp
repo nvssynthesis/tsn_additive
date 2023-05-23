@@ -259,8 +259,17 @@ void Tsara_additiveAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
 	synthesiser.renderNextBlock(buffer, midiMessages, 0, blockSize);
 	
 	buffer.applyGain(2.f);
+	auto numOutputChannels = buffer.getNumChannels();
+	for (auto samp = 0; samp < buffer.getNumSamples(); ++samp)
+	{
+		for (auto channel = 0; channel < numOutputChannels; ++channel)
+		{
+			auto x = buffer.getSample(channel, samp);
+			x = juce::jlimit<float>(-2.f, 2.f, x);
+			buffer.setSample(channel, samp, x);
+		}
+	}
 	
-	juce::jlimit<float>(-2.f, 2.f, 1.f);
 	
 	// MAGIC GUI: send the finished buffer to the level meter
     outputMeter->pushSamples (buffer);

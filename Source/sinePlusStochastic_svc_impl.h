@@ -98,6 +98,7 @@ void SynthesisContainer::sinePlusStochastic_svc::doSetTimbre(baseTimbre &&new_ti
 			tempDerived->shiftFreqs = spstPtr->shiftFreqs;
 			tempDerived->tiltFreqs = spstPtr->tiltFreqs;
 			tempDerived->tonalStochRatio = spstPtr->tonalStochRatio;
+			tempDerived->stocF = spstPtr->stocF;
 		}
 	}
 }
@@ -151,6 +152,11 @@ void SynthesisContainer::sinePlusStochastic_svc::prepareRequestedSynthesis(){
 	
 	const sinePlusStochasticTimbre *spst = dynamic_cast<sinePlusStochasticTimbre*>(_voice_timbre.get());
 	if(spst){
+		// filter by removal:
+		//	all under ~5 Hz
+		//	repetitions?
+		
+		
 		// set timbral params
 		const float ofst = spst->shiftFreqs;
 		std::transform(_sineFreqs.begin(), _sineFreqs.end(), _sineFreqs.begin(), [&ofst](auto& c){
@@ -176,11 +182,15 @@ void SynthesisContainer::sinePlusStochastic_svc::prepareRequestedSynthesis(){
 			auto val =  c*ratio;
 			return val;
 		});
-		
+				
 		// should really remove_if too high magnitude
+		
+		stocTonalRat_last = spst->tonalStochRatio;
+		stocF_last = spst->stocF;
 	}
 	// compute algo
 	_spsModelAlgo->compute();
+	
 	
 	_state.frameReady = true;
 	shouldResetPhasesFromData = false;
@@ -195,8 +205,11 @@ float SynthesisContainer::sinePlusStochastic_svc::doProduceSample(){
 		return 0.f;
 	}
 	unsigned int idxWithinFrame =	owner.totalFramesSamplewiseIdx % owner.sc_analysisData->hopSize;
-	float val = outputFrame[idxWithinFrame];
-	return val;
+	float valTonal = sineOutputFrame[idxWithinFrame] * (stocTonalRat_last);
+	float valStoch = stocOutputFrame[idxWithinFrame] * (1.f - stocTonalRat_last);
+
+	
+	return valTonal + valStoch;
 }
 
 
