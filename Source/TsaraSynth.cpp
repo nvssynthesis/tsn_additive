@@ -418,24 +418,48 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 		}
 		else if (navType == navigationTypes_e::greedyToPCA)
 		{
+			C_kernelScaling *= 1000.f;
 			// get desired PCA dimensions
 			std::vector<float> const dimen = getTargetDimensions();
 			const float maximal_dist = std::numeric_limits<float>::max();
-			float least_dist = maximal_dist;
+			//float least_dist = maximal_dist;
 			// get adjacent vertices
 			nvs::sgt::adjacency_iter_t ait, ait_end;
+			// structured binding instead?
+			std::tie(ait, ait_end) = boost::adjacent_vertices(*initialTargetVit, *dg);
+			auto N_adj = ait_end - ait;
 			nvs::sgt::DirectedGraph_t::vertex_descriptor vd;
 			
+			// MAKE VECTOR OF ADJACENT INDICES & PROBABILITIES
+			// should pre-allocate storage space
+			std::vector<size_t> adjacentIndices(N_adj);
+			std::vector<float> adjacentProbs(N_adj);
+			
+			
 			// actually i should check if self-transition would be less distance to the desired PCA
-			for (std::tie(ait, ait_end) = boost::adjacent_vertices(*initialTargetVit, *dg); ait != ait_end; ++ait) {
+			for (; ait != ait_end; ++ait) {
 				const std::vector<float> &x1 = getAnalysisData().PCAmat[(*ait)];
 				std::optional<float> dist_opt = nvs::dst::euc_distance(dimen, x1);
 				float dist = dist_opt.value_or(maximal_dist);
-				if (dist < least_dist){
-					least_dist = dist;
-					vd = *ait;
-				}
+//				if (dist < least_dist){
+//					least_dist = dist;
+//					vd = *ait;
+//				}
+				jassert(dist < maximal_dist);
+				auto curr_idx = ait_end - ait - 1;
+				jassert((curr_idx >= 0) && (curr_idx < (ait_end - ait)));
+				adjacentIndices[curr_idx] = *ait;
+				auto val = nvs::dst::distance2prob<float>(dist, C_kernelScaling);
+				adjacentProbs[curr_idx] = val;
 			}
+			nvs::sgt::printProbs<float>(adjacentProbs);
+			nvs::sgt::exaggerateProbabilities<float>(adjacentProbs,probPower);
+			nvs::sgt::normalizeProbabilities<float>(adjacentProbs);
+			nvs::sgt::printProbs<float>(adjacentProbs);
+			std::cout << '\n';
+			size_t arrivedIdx = nvs::rand::rollWeightedDie<float>(adjacentProbs);
+			vd = adjacentIndices[arrivedIdx];
+
 			initialTargetFrame = vd;
 			initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
 		}

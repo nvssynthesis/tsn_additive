@@ -180,8 +180,6 @@
 	return dg;
 }
 
-
-
  void nvs::sgt::printEdges(nvs::sgt::DirectedGraph_t &dg){
 	std::cout << "printing edges: \n";
 	for (auto [edge_st, edge_end] = edges(dg); edge_st != edge_end; ++edge_st)
@@ -245,28 +243,6 @@
 	return closestVertex;
 }
 
- void nvs::sgt::printProbs(std::vector<double> const &probs){
-	for (auto &p : probs)
-		std::cout << p << ' ';
-	std::cout << ";\n";
-}
-
- inline void nvs::sgt::exaggerateProbabilities(std::vector<double> &probs, double power){
-	std::transform(probs.begin(), probs.end(), probs.begin(), [power](const double x){
-		double xpt = std::pow(x, power);
-		double mxpt = std::pow((1.0 - x), power);
-		return xpt / (xpt + mxpt);
-	});
-}
- inline void nvs::sgt::normalizeProbabilities(std::vector<double> &probs){
-	double sum = std::accumulate(probs.begin(), probs.end(), 0.0);
-	if (sum > 0.0){
-		std::transform(probs.begin(), probs.end(), probs.begin(), [sum](const double d){
-			return d / sum;
-		});
-	}
-}
-
 
  inline std::vector<double> nvs::sgt::getProbabilitiesFromCurrentNode(nvs::sgt::DirectedGraph_t const &dg, nvs::sgt::vertex_descriptor_t current_vertex, const float C_kernelScaling){
 	int i = 0;
@@ -277,7 +253,8 @@
 	for (auto eit = out_edge_st; eit != out_edge_end; ++eit) {
 		edge_property *e_prop = (edge_property *)eit->get_property();
 		double distance = e_prop->timbral_distance;
-		probabilities[i] = std::exp(-(distance*distance) / (2.0 * (C_kernelScaling*C_kernelScaling)));
+		// intentionally non-normalized here
+		probabilities[i] = nvs::dst::distance2prob<float>(distance, C_kernelScaling);
 		i++;
 	}
 	return probabilities;

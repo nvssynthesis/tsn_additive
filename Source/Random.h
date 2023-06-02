@@ -19,8 +19,8 @@
 namespace nvs	{
 namespace rand	{
 typedef boost::random::mt19937 random_gen_t;
-typedef boost::random::discrete_distribution<size_t,double> discrete_distr_t;
-typedef boost::normal_distribution<double> normal_distr_t;
+//typedef boost::random::discrete_distribution<size_t,double> discrete_distr_t;
+//typedef boost::normal_distribution<double> normal_distr_t;
 
 static random_gen_t gen;
 
@@ -37,7 +37,9 @@ static std::vector<size_t> getRandomIndices(size_t maxValInclusive, size_t numVa
 	return randVec;
 }
 
-inline size_t rollWeightedDie(std::vector<double> const &probs){
+template<typename float_t>
+inline size_t rollWeightedDie(std::vector<float_t> const &probs){
+	typedef boost::random::discrete_distribution<size_t,float_t> discrete_distr_t;
 	discrete_distr_t dist(probs.begin(), probs.end());
 	// HERE is where it matters that i'm changing the gaussian
 	boost::variate_generator< random_gen_t&, discrete_distr_t > weightsampler(gen, dist);

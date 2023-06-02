@@ -47,6 +47,7 @@ std::optional<float> nvs::dst::kullback_leibler_divergence(std::vector<float> co
 	return d;
 }
 
+
 float nvs::dst::loudnessDistance(float src_loud, float dst_loud){
 	float dif = src_loud - dst_loud;
 	dif *= dif;

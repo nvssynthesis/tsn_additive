@@ -82,7 +82,13 @@ DirectedGraph_t createGraphFromAnalysisData(AnalysisData const &data, connection
 
 void printGraph(DirectedGraph_t const &dg);
 void printEdges(DirectedGraph_t &dg);
-void printProbs(std::vector<double> const &probs);
+
+template<typename float_t>
+void printProbs(std::vector<float_t> const &probs){
+	for (auto &p : probs)
+		std::cout << p << ' ';
+	std::cout << ";\n";
+}
 
 double getOutEdgeWeightPercentile(DirectedGraph_t &dg, vertex_iterator_t vit, double percentile = 0.5);
 
@@ -90,9 +96,25 @@ vertex_iterator_t vertexDescriptorToIterator(DirectedGraph_t const &dg, vertex_d
 vertex_descriptor_t traverseToNearestVertex(DirectedGraph_t &dg, vertex_iterator_t vit);
 
 inline std::vector<double> getProbabilitiesFromCurrentNode(DirectedGraph_t const &dg, vertex_descriptor_t current_vertex, const float C_kernelScaling);
-inline void exaggerateProbabilities(std::vector<double> &probs, double power);
-inline void normalizeProbabilities(std::vector<double> &probs);
 
+template<typename float_t>
+inline void exaggerateProbabilities(std::vector<float_t> &probs, float_t power){
+	std::transform(probs.begin(), probs.end(), probs.begin(), [power](const float_t x){
+		float_t xpt = std::pow(x, power);
+		float_t mxpt = std::pow((1.0 - x), power);
+		return xpt / (xpt + mxpt);
+	});
+}
+template<typename float_t>
+inline void normalizeProbabilities(std::vector<float_t> &probs){
+	float_t const zero = static_cast<float_t>(0.0);
+	float_t sum = std::accumulate(probs.begin(), probs.end(), zero);
+	if (sum > zero){
+		std::transform(probs.begin(), probs.end(), probs.begin(), [sum](const float_t d){
+			return d / sum;
+		});
+	}
+}
 
 vertex_descriptor_t traverseToRandomVertex(DirectedGraph_t &dg, vertex_descriptor_t current_vertex, const float C_kernelScaling = .01f, double probPower = 1.0);
 
