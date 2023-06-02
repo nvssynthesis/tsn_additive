@@ -121,11 +121,13 @@ void TsaraSynth::addNavigationParameters (juce::AudioProcessorValueTreeState::Pa
 																 "Probability Power", probPowerRange,
 																 1.f);	// default
 	
+	juce::StringArray navTypesStringArr = {};
+	for (int type = 0; type < static_cast<int>(navigationTypes_e::count); ++type)
+		navTypesStringArr.add(navTypeToString.at(static_cast<navigationTypes_e>(type)));
+	
 	auto navStyle = std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(IDs::paramNavigationStyle, 1), //param ID
 															   "Navigation Style",
-															   juce::StringArray (navTypeToString.at((navigationTypes_e)0),
-																				  navTypeToString.at((navigationTypes_e)1),
-																				  navTypeToString.at((navigationTypes_e)2)),
+															   navTypesStringArr,
 															   0);	// default choice
 	group->addChild(std::move(location));
 	group->addChild(std::move(traversalSpeed));
@@ -416,7 +418,7 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 //			initialTargetFrame = getAnalysisData().searchPCAfromPermutation(dimen, 500);
 			initialTargetFrame = getAnalysisData().searchPCA(dimen);
 		}
-		else if (navType == navigationTypes_e::greedyToPCA)
+		else if (navType == navigationTypes_e::greedy)
 		{
 			C_kernelScaling *= 1000.f;
 			// get desired PCA dimensions

@@ -43,15 +43,17 @@ namespace IDs
 	static juce::String paramD4		{ "dimension 4" };
 }
 enum class navigationTypes_e {
-	attract = 0,
+	forward = 0,
+	attract,
 	wander,
-	greedyToPCA,
+	greedy,
 	count
 };
 static const std::map<navigationTypes_e, juce::String> navTypeToString{
+	{navigationTypes_e::forward, 	"forward"},
 	{navigationTypes_e::attract, 	"attract"},
 	{navigationTypes_e::wander, 	"wander"},
-	{navigationTypes_e::greedyToPCA, 	"greedyToPCA"}
+	{navigationTypes_e::greedy, 	"greedy"}
 };
 
 class TsaraSynth
