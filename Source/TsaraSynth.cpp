@@ -407,7 +407,13 @@ void TsaraSynth::TsaraVoice::renderNextBlock (juce::AudioBuffer<float>& outputBu
 
 	if (shouldSelectNewFrame){
 		navigationTypes_e const navType = getNavigationType();
-		if (navType == navigationTypes_e::wander){
+		if (navType == navigationTypes_e::forward){
+			nvs::sgt::DirectedGraph_t::vertex_descriptor vd = (*initialTargetVit) + 1;
+			vd %= getNumFrames();
+			initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
+			initialTargetFrame = vd;
+		}
+		else if (navType == navigationTypes_e::wander){
 			nvs::sgt::DirectedGraph_t::vertex_descriptor vd = nvs::sgt::traverseToRandomVertex(*dg, *initialTargetVit, C_kernelScaling, probPower);
 			initialTargetVit = nvs::sgt::vertexDescriptorToIterator(*dg, nvs::sgt::DirectedGraph_t::vertex_descriptor(vd));
 			initialTargetFrame = vd;
